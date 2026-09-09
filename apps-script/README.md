@@ -18,6 +18,8 @@ full setup:
 - Project Settings → Script Properties, set:
   - `SHARED_TOKEN` — a random string both users paste into the app's Settings screen.
   - `CALENDAR_ID` — the shared Calendar's ID (Calendar → Settings → that calendar → "Integrate calendar" → Calendar ID).
+  - `ALI_EMAIL`, `MOHSEN_EMAIL` — real addresses for assignment/digest emails.
+    Kept out of `Code.gs` itself (this repo is public) — see `getUsers()`.
 
 ## 3. Calendar
 

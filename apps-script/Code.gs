@@ -6,11 +6,6 @@
 
 var SHEET_NAME = 'Tasks';
 
-var USERS = {
-  ali: { name: 'Ali', email: '1369.jalali@gmail.com' },
-  mohsen: { name: 'Mohsen', email: 'mohsen.etmdn@gmail.com' },
-};
-
 var COLUMNS = [
   'id', 'project', 'title', 'assignee', 'stage', 'priority', 'due_date',
   'is_deliverable', 'status', 'created_date', 'done_date', 'link', 'notes', 'gcal_event_id',
@@ -18,6 +13,15 @@ var COLUMNS = [
 
 function getConfig(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+// Names/emails come from Script Properties (ALI_EMAIL, MOHSEN_EMAIL), not
+// hardcoded here — this file is committed to a public repo (see README).
+function getUsers() {
+  return {
+    ali: { name: 'Ali', email: getConfig('ALI_EMAIL') },
+    mohsen: { name: 'Mohsen', email: getConfig('MOHSEN_EMAIL') },
+  };
 }
 
 // ---------------- Web app entry points ----------------
@@ -179,6 +183,7 @@ function getCalendar() {
 }
 
 function eventTitle(task) {
+  var USERS = getUsers();
   var who = USERS[task.assignee] ? USERS[task.assignee].name : task.assignee;
   return (task.is_deliverable ? '★ ' : '') + task.title + ' [' + who + ']';
 }
@@ -237,7 +242,7 @@ function setEventId(id, eventId) {
 // ---------------- Email notifications ----------------
 
 function notifyAssignment(task) {
-  var user = USERS[task.assignee];
+  var user = getUsers()[task.assignee];
   if (!user) return;
   MailApp.sendEmail({
     to: user.email,
@@ -251,7 +256,7 @@ function notifyAssignment(task) {
 }
 
 function notifyStatusChange(task) {
-  var user = USERS[task.assignee];
+  var user = getUsers()[task.assignee];
   if (!user) return;
   MailApp.sendEmail({
     to: user.email,
@@ -263,6 +268,7 @@ function notifyStatusChange(task) {
 // ---------------- Daily digest ----------------
 
 function sendDailyDigest() {
+  var USERS = getUsers();
   var tasks = listTasks().filter(function (t) { return t.status !== 'Done' && t.due_date; });
   var today = isoDateStr(new Date());
 
@@ -413,7 +419,7 @@ function weekLabel(weekKeyStr) {
 
 function computeDashboard(tasks) {
   var today = new Date();
-  var personIds = Object.keys(USERS);
+  var personIds = ['ali', 'mohsen']; // fixed roster — see build brief §2
   var freshCounter = function () {
     var o = {};
     personIds.forEach(function (id) { o[id] = 0; });
@@ -498,6 +504,7 @@ function computeDashboard(tasks) {
 // a plain confirmation to the execution log.
 
 function verifySetup() {
+  var USERS = getUsers();
   var sheet = getSheet();
   Logger.log('Sheet OK: ' + sheet.getName() + ', rows=' + sheet.getLastRow());
 
@@ -506,10 +513,10 @@ function verifySetup() {
 
   Logger.log('Today in Jalali: ' + JSON.stringify(toJalali(new Date())));
 
-  var token = getConfig('SHARED_TOKEN');
-  Logger.log('SHARED_TOKEN set: ' + (token ? 'yes' : 'NO - set it in Project Settings > Script Properties'));
-  var calId = getConfig('CALENDAR_ID');
-  Logger.log('CALENDAR_ID set: ' + (calId ? 'yes' : 'NO - set it in Project Settings > Script Properties'));
+  ['SHARED_TOKEN', 'CALENDAR_ID', 'ALI_EMAIL', 'MOHSEN_EMAIL'].forEach(function (key) {
+    var val = getConfig(key);
+    Logger.log(key + ' set: ' + (val ? 'yes' : 'NO - set it in Project Settings > Script Properties'));
+  });
 
   Logger.log('Sending a test email to both of you...');
   MailApp.sendEmail({
