@@ -5,6 +5,16 @@
 // ===================================================================
 
 var SHEET_NAME = 'Tasks';
+var CONFIG_SHEET_NAME = 'Config';
+
+// Seeded into the Config sheet tab the first time it's needed — see
+// getConfigSheet(). After that, these lists live entirely in the Sheet and
+// are managed from the app's Settings screen (Project/Stage/Status editors).
+var DEFAULT_STAGES = [
+  'Backlog', 'Pre-pro', 'Shoot', 'Ingest/Backup', 'Transcribe',
+  'Assembly', 'Fine cut', 'Color', 'Sound', 'Review', 'Delivered',
+];
+var DEFAULT_STATUSES = ['Todo', 'In-progress', 'Blocked', 'Review', 'Done'];
 
 var COLUMNS = [
   'id', 'project', 'title', 'assignee', 'stage', 'priority', 'due_date',
@@ -34,7 +44,18 @@ function doPost(e) {
   return handle(e);
 }
 
+// Every request grabs this before touching the Sheet and releases it after.
+// Without it, two near-simultaneous requests (Ali and Mohsen editing at once,
+// or even a fast double-click) can interleave their read-modify-write and
+// silently drop one of them — Apps Script gives no serialization for free.
 function handle(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (lockErr) {
+    return json({ error: 'Server is busy — try again in a moment.' });
+  }
+
   try {
     var body = {};
     if (e.postData && e.postData.contents) {
@@ -60,11 +81,17 @@ function handle(e) {
         return json({ task: updateTask(body.id, body.patch || {}) });
       case 'delete':
         return json({ ok: deleteTask(body.id) });
+      case 'config':
+        return json(getConfigLists());
+      case 'setConfigList':
+        return json(setConfigList(body.type, body.values || []));
       default:
         return json({ error: 'unknown action: ' + action });
     }
   } catch (err) {
     return json({ error: String(err && err.message ? err.message : err) });
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -76,6 +103,64 @@ function json(obj) {
 
 function getSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+}
+
+// ---------------- Editable Project/Stage/Status lists ----------------
+// Self-healing: the first read or write auto-creates & seeds the "Config"
+// tab if it isn't there yet, so there's no manual Sheet setup step.
+
+function getConfigSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (sheet) return sheet;
+
+  sheet = ss.insertSheet(CONFIG_SHEET_NAME);
+  sheet.getRange(1, 1, 1, 3).setValues([['stage', 'project', 'status']]);
+  sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+
+  var rowCount = Math.max(DEFAULT_STAGES.length, DEFAULT_STATUSES.length);
+  var rows = [];
+  for (var i = 0; i < rowCount; i++) {
+    rows.push([DEFAULT_STAGES[i] || '', '', DEFAULT_STATUSES[i] || '']);
+  }
+  if (rows.length) sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+  return sheet;
+}
+
+function getConfigLists() {
+  var sheet = getConfigSheet();
+  var values = sheet.getDataRange().getValues();
+  var header = values[0].map(function (h) { return String(h).toLowerCase().trim(); });
+  var col = { stage: header.indexOf('stage'), project: header.indexOf('project'), status: header.indexOf('status') };
+
+  var out = { stages: [], projects: [], statuses: [] };
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    if (col.stage > -1 && row[col.stage]) out.stages.push(String(row[col.stage]));
+    if (col.project > -1 && row[col.project]) out.projects.push(String(row[col.project]));
+    if (col.status > -1 && row[col.status]) out.statuses.push(String(row[col.status]));
+  }
+  return out;
+}
+
+// type: 'stage' | 'project' | 'status'. Replaces that whole column with the
+// given list — the frontend sends the full desired list on every add/rename/
+// delete, so there's no per-item logic to keep in sync here.
+function setConfigList(type, list) {
+  var colMap = { stage: 1, project: 2, status: 3 };
+  var col = colMap[type];
+  if (!col) throw new Error('unknown config list type: ' + type);
+
+  var clean = (list || []).map(function (v) { return String(v).trim(); }).filter(function (v) { return v; });
+  if (type === 'status' && clean.indexOf('Done') === -1) {
+    throw new Error('"Done" is required and can\'t be removed from statuses');
+  }
+
+  var sheet = getConfigSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, col, lastRow - 1, 1).clearContent();
+  if (clean.length) sheet.getRange(2, col, clean.length, 1).setValues(clean.map(function (v) { return [v]; }));
+  return getConfigLists();
 }
 
 function listTasks() {

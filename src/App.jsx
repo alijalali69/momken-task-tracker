@@ -12,6 +12,8 @@ import Today from "./screens/Today";
 function App() {
   const [config, setConfig] = useState(() => api.loadConfig());
   const [tasks, setTasks] = useState([]);
+  const [lists, setLists] = useState({ stages: [], projects: [], statuses: [] });
+  const [listError, setListError] = useState("");
   // 'no-config' | 'loading' | 'ready' | 'error'
   const [loadState, setLoadState] = useState(config ? "loading" : "no-config");
   const [loadError, setLoadError] = useState("");
@@ -27,8 +29,9 @@ function App() {
       if (!cfg) return;
       setLoadState((s) => (s === "ready" ? "ready" : "loading")); // don't blank the screen on a background refresh
       try {
-        const fresh = await api.fetchTasks(cfg);
+        const [fresh, freshLists] = await Promise.all([api.fetchTasks(cfg), api.fetchConfigLists(cfg)]);
         setTasks(fresh);
+        setLists(freshLists);
         setLoadState("ready");
       } catch (err) {
         setLoadError(err.message);
@@ -37,6 +40,16 @@ function App() {
     },
     [config]
   );
+
+  async function handleSaveList(type, values) {
+    setListError("");
+    try {
+      const updated = await api.saveConfigList(config, type, values);
+      setLists(updated);
+    } catch (err) {
+      setListError(err.message);
+    }
+  }
 
   useEffect(() => {
     if (config) refreshTasks(config);
@@ -76,11 +89,11 @@ function App() {
         title,
         project: "Unassigned",
         assignee: viewer,
-        stage: "Backlog",
+        stage: lists.stages[0] ?? "Backlog",
         priority: "Medium",
         due_date: null,
         is_deliverable: false,
-        status: "Todo",
+        status: lists.statuses.find((s) => s !== "Done") ?? "Todo",
         link: "",
         notes: "",
       })
@@ -161,7 +174,9 @@ function App() {
 
   const screens = {
     dashboard: gated(<Dashboard tasks={tasks} onOpenTask={(task) => openTaskForm({ mode: "edit", task })} />),
-    board: gated(<Board tasks={tasks} viewer={viewer} onOpenTask={(task) => openTaskForm({ mode: "edit", task })} />),
+    board: gated(
+      <Board tasks={tasks} viewer={viewer} stages={lists.stages} onOpenTask={(task) => openTaskForm({ mode: "edit", task })} />
+    ),
     today: gated(
       <Today
         tasks={tasks}
@@ -177,6 +192,9 @@ function App() {
         config={config}
         connectionStatus={loadState === "error" ? "error" : loadState === "no-config" ? "idle" : "connected"}
         onConnected={handleConnected}
+        lists={config ? lists : null}
+        onSaveList={handleSaveList}
+        listError={listError}
       />
     ),
     "task-form": formState
@@ -185,6 +203,9 @@ function App() {
             mode={formState.mode}
             initialTask={formState.task}
             viewer={viewer}
+            projects={lists.projects}
+            stages={lists.stages}
+            statuses={lists.statuses}
             onSave={handleSaveTask}
             onCancel={closeTaskForm}
             onDelete={formState.mode === "edit" ? handleDeleteTask : undefined}

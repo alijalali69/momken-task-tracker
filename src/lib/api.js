@@ -61,3 +61,16 @@ export function updateTask(config, id, patch) {
 export function deleteTask(config, id) {
   return call(config, "delete", { id }).then((data) => data.ok);
 }
+
+// { stages, projects, statuses } — managed from Settings, stored in the
+// Sheet's "Config" tab (auto-created there on first use).
+export function fetchConfigLists(config) {
+  return call(config, "config");
+}
+
+// type: 'stage' | 'project' | 'status'. Sends the whole desired list —
+// the backend replaces that column wholesale, so add/rename/delete are all
+// just "here's the new full list" from the frontend's point of view.
+export function saveConfigList(config, type, values) {
+  return call(config, "setConfigList", { type, values });
+}

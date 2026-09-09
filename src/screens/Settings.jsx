@@ -1,6 +1,7 @@
 import { Check, Eye, EyeOff, Info, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import Card from "../components/ui/Card";
+import EditableList from "../components/ui/EditableList";
 import { fetchTasks, saveConfig } from "../lib/api";
 
 const STATUS_STYLES = {
@@ -17,7 +18,7 @@ const STATUS_LABEL = {
   idle: "Not connected",
 };
 
-export default function Settings({ config, connectionStatus, onConnected }) {
+export default function Settings({ config, connectionStatus, onConnected, lists, onSaveList, listError }) {
   const [sheetUrl, setSheetUrl] = useState(config?.sheetUrl ?? "");
   const [scriptUrl, setScriptUrl] = useState(config?.scriptUrl ?? "");
   const [token, setToken] = useState(config?.token ?? "");
@@ -120,6 +121,45 @@ export default function Settings({ config, connectionStatus, onConnected }) {
           </button>
         </div>
       </Card>
+
+      {config && lists && (
+        <Card className="flex flex-col gap-5 p-5">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Task fields</h2>
+            <p className="text-xs text-slate-400">
+              Add, rename, or remove the Project / Stage / Status options shown on tasks. Renaming or removing one
+              doesn't change tasks already using the old value — only what's offered going forward.
+            </p>
+          </div>
+
+          {listError && (
+            <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {listError}
+            </div>
+          )}
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Projects</h3>
+            <EditableList items={lists.projects} onChange={(next) => onSaveList("project", next)} placeholder="Add a project…" />
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Stages</h3>
+            <EditableList items={lists.stages} onChange={(next) => onSaveList("stage", next)} placeholder="Add a stage…" />
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Statuses</h3>
+            <EditableList
+              items={lists.statuses}
+              onChange={(next) => onSaveList("status", next)}
+              protectedItems={["Done"]}
+              placeholder="Add a status…"
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="flex flex-col gap-3 p-5">
         <h2 className="text-sm font-semibold text-slate-700">Language</h2>

@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import TaskCard from "../components/TaskCard";
-import { STAGES, USERS } from "../data/constants";
-import { PROJECTS } from "../data/dummyData";
+import { USERS } from "../data/constants";
 
 const GROUP_OPTIONS = [
   { key: "stage", label: "By Stage" },
   { key: "project", label: "By Project" },
 ];
 
-export default function Board({ tasks, viewer, onOpenTask }) {
+export default function Board({ tasks, viewer, stages, onOpenTask }) {
   const [groupBy, setGroupBy] = useState("stage");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
 
@@ -20,12 +19,19 @@ export default function Board({ tasks, viewer, onOpenTask }) {
   }, [tasks, assigneeFilter]);
 
   const groups = useMemo(() => {
-    const keys = groupBy === "stage" ? STAGES : PROJECTS;
-    return keys.map((key) => ({
-      key,
-      tasks: filtered.filter((t) => (groupBy === "stage" ? t.stage === key : t.project === key)),
-    }));
-  }, [filtered, groupBy]);
+    if (groupBy === "stage") {
+      // Managed list, in order, so empty stages still show as columns —
+      // plus any stray stage value on a task that's since been removed
+      // from Settings, so nothing silently disappears from the board.
+      const known = stages ?? [];
+      const stray = [...new Set(filtered.map((t) => t.stage))].filter((s) => s && !known.includes(s));
+      return [...known, ...stray].map((key) => ({ key, tasks: filtered.filter((t) => t.stage === key) }));
+    }
+    // Project grouping just reflects whatever's actually on the tasks —
+    // no need for the managed list here.
+    const keys = [...new Set(filtered.map((t) => t.project))].filter(Boolean);
+    return keys.map((key) => ({ key, tasks: filtered.filter((t) => t.project === key) }));
+  }, [filtered, groupBy, stages]);
 
   return (
     <div className="flex flex-col gap-4">

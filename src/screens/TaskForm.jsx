@@ -3,28 +3,37 @@ import { useState } from "react";
 import Avatar from "../components/ui/Avatar";
 import Card from "../components/ui/Card";
 import JalaliDateField from "../components/ui/JalaliDateField";
-import { PRIORITIES, STAGES, STATUSES, USERS } from "../data/constants";
-import { PROJECTS } from "../data/dummyData";
+import { PRIORITIES, USERS } from "../data/constants";
 
-const emptyForm = {
-  title: "",
-  project: PROJECTS[0],
-  assignee: "ali",
-  stage: STAGES[0],
-  priority: "Medium",
-  due_date: "",
-  is_deliverable: false,
-  status: "Todo",
-  link: "",
-  notes: "",
-};
+// Keeps a task's current value selectable even if it's since been renamed or
+// removed from Settings — editing an old task should never silently change
+// its Project/Stage/Status just because the picklist moved on.
+function withCurrent(list, current) {
+  if (!current || list.includes(current)) return list;
+  return [current, ...list];
+}
 
-export default function TaskForm({ mode, initialTask, viewer, onSave, onCancel, onDelete }) {
+export default function TaskForm({ mode, initialTask, viewer, projects, stages, statuses, onSave, onCancel, onDelete }) {
+  const emptyForm = {
+    title: "",
+    project: projects[0] ?? "",
+    assignee: viewer,
+    stage: stages[0] ?? "",
+    priority: "Medium",
+    due_date: "",
+    is_deliverable: false,
+    status: statuses.find((s) => s !== "Done") ?? statuses[0] ?? "",
+    link: "",
+    notes: "",
+  };
+
   const [form, setForm] = useState(() =>
-    initialTask
-      ? { ...emptyForm, ...initialTask, due_date: initialTask.due_date ?? "" }
-      : { ...emptyForm, assignee: viewer }
+    initialTask ? { ...emptyForm, ...initialTask, due_date: initialTask.due_date ?? "" } : emptyForm
   );
+
+  const projectOptions = withCurrent(projects, form.project);
+  const stageOptions = withCurrent(stages, form.stage);
+  const statusOptions = withCurrent(statuses, form.status);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -57,13 +66,19 @@ export default function TaskForm({ mode, initialTask, viewer, onSave, onCancel, 
         </Field>
 
         <Field label="Project">
-          <select value={form.project} onChange={(e) => set("project", e.target.value)} className="input">
-            {PROJECTS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          {projectOptions.length ? (
+            <select value={form.project} onChange={(e) => set("project", e.target.value)} className="input">
+              {projectOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-400">
+              No projects yet — add one in Settings first.
+            </p>
+          )}
         </Field>
 
         <Field label="Due date (Persian calendar)">
@@ -91,7 +106,7 @@ export default function TaskForm({ mode, initialTask, viewer, onSave, onCancel, 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Stage">
             <select value={form.stage} onChange={(e) => set("stage", e.target.value)} className="input">
-              {STAGES.map((s) => (
+              {stageOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -101,7 +116,7 @@ export default function TaskForm({ mode, initialTask, viewer, onSave, onCancel, 
 
           <Field label="Status">
             <select value={form.status} onChange={(e) => set("status", e.target.value)} className="input">
-              {STATUSES.map((s) => (
+              {statusOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
